@@ -1,0 +1,140 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: support_db
+      POSTGRES_USER: support
+      POSTGRES_PASSWORD: support
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U support -d support_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  java-backend:
+    build:
+      context: ./java-backend
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: support_db
+      DB_USER: support
+      DB_PASSWORD: support
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVER_PORT: 8080
+      AI_AGENT_URL: http://ai-service:8080
+      AI_AGENT_API_KEY: ${AI_AGENT_API_KEY:-change-ai-agent-key}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-internal-service-key}
+      JWT_SECRET: ${JWT_SECRET:-change-this-development-secret-key-to-a-long-random-value}
+      SLACK_MCP_URL: http://slack-mcp:8103
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  ai-service:
+    build:
+      context: ./python-ai-agent
+    environment:
+      JAVA_BACKEND_URL: http://java-backend:8080
+      JAVA_API_KEY: ${INTERNAL_API_KEY:-change-internal-service-key}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-internal-service-key}
+      AI_AGENT_API_KEY: ${AI_AGENT_API_KEY:-change-ai-agent-key}
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      BACKEND_MCP_URL: http://backend-mcp:8101/mcp
+      RAG_MCP_URL: http://rag-mcp:8102/mcp
+      SLACK_MCP_URL: http://slack-mcp:8103/mcp
+      JIRA_MCP_URL: http://jira-mcp:8104/mcp
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-openai}
+      MODEL_NAME: ${MODEL_NAME:-gpt-4.1-mini}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MOCK_LLM: ${MOCK_LLM:-true}
+    ports:
+      - "8001:8080"
+    depends_on:
+      - redis
+      - qdrant
+      - backend-mcp
+      - rag-mcp
+
+  backend-mcp:
+    build:
+      context: ./python-ai-agent
+    command: ["python", "-m", "src.mcp_servers.backend_server"]
+    environment:
+      JAVA_BACKEND_URL: http://java-backend:8080
+      JAVA_API_KEY: ${INTERNAL_API_KEY:-change-internal-service-key}
+    expose:
+      - "8101"
+    # Do not depend on java-backend here: Java also calls ai-service,
+    # so adding this dependency would create a Compose dependency cycle.
+
+  rag-mcp:
+    build:
+      context: ./python-ai-agent
+    command: ["python", "-m", "src.mcp_servers.rag_server"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
+    expose:
+      - "8102"
+    depends_on:
+      - redis
+      - qdrant
+
+  slack-mcp:
+    build:
+      context: ./python-ai-agent
+    command: ["python", "-m", "src.mcp_servers.slack_server"]
+    environment:
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-internal-service-key}
+    expose:
+      - "8103"
+
+  jira-mcp:
+    build:
+      context: ./python-ai-agent
+    command: ["python", "-m", "src.mcp_servers.jira_server"]
+    environment:
+      JIRA_BASE_URL: ${JIRA_BASE_URL:-}
+      JIRA_EMAIL: ${JIRA_EMAIL:-}
+      JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
+    expose:
+      - "8104"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_API_URL: http://localhost:8081/api/v1
+    ports:
+      - "3000:80"
+    depends_on:
+      - java-backend
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:

@@ -1,0 +1,55 @@
+spring:
+  application:
+    name: customer-support-backend
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:support_db}
+    username: ${DB_USER:support}
+    password: ${DB_PASSWORD:support}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+
+server:
+  port: ${SERVER_PORT:8080}
+
+ai:
+  agent:
+    url: ${AI_AGENT_URL:http://python-agent:8001}
+
+integrations:
+  slack-mcp-url: ${SLACK_MCP_URL:http://slack-mcp:8004}
+
+security:
+  ai-agent-api-key: ${AI_AGENT_API_KEY:change-ai-agent-key}
+  internal-api-key: ${INTERNAL_API_KEY:change-internal-service-key}
+  jwt:
+    secret: ${JWT_SECRET:change-this-development-secret-key-to-a-long-random-value}
+    access-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS:900000}
+    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:86400000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.aisupport: DEBUG

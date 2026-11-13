@@ -1,6 +1,6 @@
-# Customer Support AI Platform — Java + Python + React
+# CareDesk2u — Java + Python + React
 
-This is the audited, compatibility-fixed end-to-end stack.
+This is a Customer Support AI Platform  end-to-end stack.
 
 ## Architecture
 
